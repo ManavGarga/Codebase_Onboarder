@@ -1,0 +1,121 @@
+services:
+  # ==========================================
+  # Storage & Vector Databases
+  # ==========================================
+  mongodb:
+    image: mongo:7.0
+    container_name: codebase_onboarder_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - onboarder-network
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: codebase_onboarder_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - onboarder-network
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.0
+    container_name: codebase_onboarder_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - onboarder-network
+
+  # ==========================================
+  # AI & Code Intelligence Service (Python + FastAPI)
+  # ==========================================
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: codebase_onboarder_ai
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      - REPO_STORAGE_PATH=/app/data/repos
+    volumes:
+      - repo_data:/app/data/repos
+    depends_on:
+      - qdrant
+      - redis
+    networks:
+      - onboarder-network
+
+  # ==========================================
+  # Backend API Gateway & Jobs (Node.js + Express)
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: codebase_onboarder_backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/codebase_onboarder
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AI_SERVICE_URL=http://ai-service:8000
+      - REPO_STORAGE_PATH=/app/data/repos
+    volumes:
+      - repo_data:/app/data/repos
+    depends_on:
+      - mongodb
+      - redis
+      - ai-service
+    networks:
+      - onboarder-network
+
+  # ==========================================
+  # Frontend Web UI (React + Vite + Tailwind)
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: codebase_onboarder_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - onboarder-network
+
+volumes:
+  mongo_data:
+  redis_data:
+  qdrant_data:
+  repo_data:
+
+networks:
+  onboarder-network:
+    driver: bridge
