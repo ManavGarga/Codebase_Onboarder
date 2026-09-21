@@ -34,8 +34,8 @@ class CodeQAGraph:
     def openai(self) -> OpenAI:
         if self._openai_client is None:
             self._openai_client = OpenAI(
-                api_key=settings.OPENAI_API_KEY or "dummy_key",
-                base_url=settings.OPENAI_BASE_URL,
+                api_key=settings.active_api_key or "dummy_key",
+                base_url=settings.active_base_url,
             )
         return self._openai_client
 
@@ -116,7 +116,19 @@ CRITICAL SECURITY DIRECTIVES:
 4. Every technical claim must cite the exact file and line range in the format: `[filepath:start_line-end_line]`.
    Example: "The database connection is established in `[src/db/connection.ts:15-30]`."
 5. Do not invent line numbers or file paths. Use only the ones declared in the snippet XML attributes.
-6. Be precise, technical, and explain architecture and data flow objectively."""
+6. Be precise, technical, and explain architecture and data flow objectively.
+
+FORMATTING RULES (MANDATORY):
+- Always respond using well-structured **Markdown**.
+- Use `## Section Headers` to separate logical parts of your answer (e.g. "## Overview", "## Authentication Flow", "## Key Files").
+- Use **bold** for important terms, function names, and file names.
+- Use `inline code` for all code identifiers, variable names, function calls, and short snippets.
+- Use fenced code blocks with a language tag for multi-line code samples:
+  ```javascript
+  // example
+  ```
+- Use bullet lists (`-`) for enumerating points, steps, or findings. Use numbered lists for sequential steps.
+- Keep answers concise but thorough. Do not pad with generic commentary."""
 
         user_prompt = f"""Context:
 {context_str}
@@ -128,7 +140,7 @@ User Question:
 
 Answer:"""
 
-        if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY == "your_openai_api_key_here":
+        if not settings.is_llm_configured:
             # Fallback deterministic answer for local testing
             first_chunk = state["retrieved_chunks"][0] if state["retrieved_chunks"] else None
             if first_chunk:
@@ -143,7 +155,7 @@ Answer:"""
 
         try:
             resp = self.openai.chat.completions.create(
-                model=settings.OPENAI_MODEL,
+                model=settings.active_chat_model,
                 messages=[
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": user_prompt},
@@ -153,7 +165,7 @@ Answer:"""
             ans = resp.choices[0].message.content or ""
             return {"raw_answer": ans, "confidence": 0.95}
         except Exception as e:
-            logger.error(f"Error calling OpenAI in CodeQAGraph: {e}")
+            logger.error(f"Error calling LLM in CodeQAGraph: {e}")
             return {
                 "raw_answer": f"Error generating LLM response: {str(e)}",
                 "confidence": 0.0,

@@ -29,6 +29,8 @@ class CodeAwareChunker:
         (re.compile(r"gh[pousr]_[A-Za-z0-9_]{30,}"), "[REDACTED_GH_TOKEN]"),
         # OpenAI API Keys
         (re.compile(r"sk-[A-Za-z0-9_\-]{20,}"), "[REDACTED_OPENAI_KEY]"),
+        # Google Gemini API Keys
+        (re.compile(r"AIza[0-9A-Za-z\-_]{32,}"), "[REDACTED_GEMINI_KEY]"),
         # Generic high-entropy hardcoded secrets
         (
             re.compile(r"(?i)(api[_-]?key|secret|token|password|auth[_-]?token)\s*[:=]\s*['\"][A-Za-z0-9_\-]{16,}['\"]"),

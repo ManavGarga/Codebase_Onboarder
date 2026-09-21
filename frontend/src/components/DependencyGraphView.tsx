@@ -42,7 +42,7 @@ interface DependencyGraphViewProps {
 
 // Custom Node Component for high-impact visual representation
 const CustomBlastNode: React.FC<{ data: any }> = ({ data }) => {
-  const { label, tier, role, risk, subtext, file_path, onSelect, onRefocus } = data;
+  const { label, tier, role, risk, subtext, file_path, onSelect, onRefocus, onViewCode } = data;
 
   const isRoot = tier === 0 || role === 'root';
   const isDirect = tier === 1 || role === 'direct';
@@ -68,7 +68,10 @@ const CustomBlastNode: React.FC<{ data: any }> = ({ data }) => {
 
   return (
     <div
-      onClick={onSelect}
+      onClick={() => {
+        if (!isRoot && onRefocus) onRefocus(label);
+        else onSelect?.();
+      }}
       className={`relative px-4 py-3 rounded-2xl border ${borderStyle} transition-all duration-200 cursor-pointer min-w-[210px] max-w-[260px] group`}
     >
       <Handle type="target" position={Position.Top} className="!bg-indigo-400 !w-2.5 !h-2.5 !-top-1.5" />
@@ -90,7 +93,7 @@ const CustomBlastNode: React.FC<{ data: any }> = ({ data }) => {
         <div className={`p-2 rounded-xl ${isRoot ? 'bg-amber-500/20 text-amber-400' : isDirect ? 'bg-indigo-500/20 text-indigo-400' : 'bg-purple-500/20 text-purple-400'}`}>
           {data.type === 'route' ? <RouteIcon className="w-4 h-4" /> : data.type === 'package' ? <Box className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
         </div>
-        <div className="overflow-hidden">
+        <div className="overflow-hidden flex-1">
           <div className="text-sm font-bold text-white truncate group-hover:text-amber-300 transition-colors" title={label}>
             {label}
           </div>
@@ -98,9 +101,21 @@ const CustomBlastNode: React.FC<{ data: any }> = ({ data }) => {
             {file_path ? file_path.split('/').slice(-2).join('/') : subtext || 'Module'}
           </div>
         </div>
+        {file_path && onViewCode && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewCode(file_path);
+            }}
+            className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition"
+            title="Inspect in Code Explorer"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Hover action to re-root or inspect */}
+      {/* Action to re-root */}
       {!isRoot && (
         <button
           onClick={(e) => {
@@ -354,9 +369,11 @@ export const DependencyGraphView: React.FC<DependencyGraphViewProps> = ({
         tier: 0,
         role: 'root',
         risk: activeRisk,
+        file_path: selectedTarget,
         subtext: 'Blast Radius Target',
-        onRefocus: () => {},
-        onSelect: () => {},
+        onRefocus: (label: string) => setSelectedTarget(label),
+        onSelect: () => setSelectedTarget(selectedTarget),
+        onViewCode: (file: string) => onSelectFileInMonaco?.(file),
       },
     });
 
@@ -381,7 +398,8 @@ export const DependencyGraphView: React.FC<DependencyGraphViewProps> = ({
           file_path: d.file_path,
           subtext: 'Direct Dependent',
           onRefocus: (label: string) => setSelectedTarget(label),
-          onSelect: () => d.file_path && onSelectFileInMonaco?.(d.file_path),
+          onSelect: () => setSelectedTarget(d.label || d.id),
+          onViewCode: (file: string) => onSelectFileInMonaco?.(file),
         },
       });
 
@@ -432,7 +450,8 @@ export const DependencyGraphView: React.FC<DependencyGraphViewProps> = ({
           type: ind.type,
           subtext: ind.type === 'route' ? 'API Route' : 'Downstream Dependent',
           onRefocus: (label: string) => setSelectedTarget(label),
-          onSelect: () => ind.file_path && onSelectFileInMonaco?.(ind.file_path),
+          onSelect: () => setSelectedTarget(ind.label || ind.id),
+          onViewCode: (file: string) => onSelectFileInMonaco?.(file),
         },
       });
 

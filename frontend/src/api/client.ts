@@ -35,8 +35,8 @@ export const apiClient = {
     return res.data.repository;
   },
 
-  ingestRepository: async (url: string, branch: string = 'main') => {
-    const res = await api.post('/repositories', { url, branch });
+  ingestRepository: async (url: string, branch: string = 'main', accessToken?: string) => {
+    const res = await api.post('/repositories', { url, branch, ...(accessToken ? { accessToken } : {}) });
     return res.data;
   },
 

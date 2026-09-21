@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, GitBranch, Github, Loader2, CheckCircle2, AlertCircle, Terminal, Sparkles } from 'lucide-react';
+import { X, GitBranch, Github, Loader2, CheckCircle2, AlertCircle, Terminal, Sparkles, Lock, Eye, EyeOff, ExternalLink, ShieldCheck } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { Repository } from '../types';
 
@@ -20,6 +20,9 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
 }) => {
   const [url, setUrl] = useState(initialUrl);
   const [branch, setBranch] = useState(initialBranch);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [accessToken, setAccessToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeRepoId, setActiveRepoId] = useState<string | null>(null);
   const [statusData, setStatusData] = useState<any>(null);
@@ -39,22 +42,38 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
     { name: 'Redux Toolkit', url: 'https://github.com/reduxjs/redux-toolkit', branch: 'master' },
   ];
 
+  // Reset state when modal is closed
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveRepoId(null);
+      setIsSubmitting(false);
+      setStatusData(null);
+      setErrorMessage(null);
+      setIsPrivate(false);
+      setAccessToken('');
+      setShowToken(false);
+    }
+  }, [isOpen]);
+
   // Poll status while job is processing
   useEffect(() => {
-    if (!activeRepoId) return;
+    if (!isOpen || !activeRepoId) return;
 
     const interval = setInterval(async () => {
       try {
-        const res = await apiClient.getRepoStatus(activeRepoId);
+        const currentRepoId = activeRepoId;
+        const res = await apiClient.getRepoStatus(currentRepoId);
         setStatusData(res);
 
         if (res.status === 'READY') {
           clearInterval(interval);
-          const fullRepo = await apiClient.getRepository(activeRepoId);
+          setActiveRepoId(null);
           setIsSubmitting(false);
+          const fullRepo = await apiClient.getRepository(currentRepoId);
           onIngestionComplete(fullRepo);
         } else if (res.status === 'FAILED') {
           clearInterval(interval);
+          setActiveRepoId(null);
           setIsSubmitting(false);
           setErrorMessage(res.error || 'Repository ingestion failed.');
         }
@@ -64,7 +83,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [activeRepoId, onIngestionComplete]);
+  }, [isOpen, activeRepoId, onIngestionComplete]);
 
   if (!isOpen) return null;
 
@@ -72,12 +91,18 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
     e.preventDefault();
     if (!url.trim()) return;
 
+    if (isPrivate && !accessToken.trim()) {
+      setErrorMessage('A GitHub Personal Access Token is required for private repositories.');
+      return;
+    }
+
     setErrorMessage(null);
     setIsSubmitting(true);
     setStatusData(null);
 
     try {
-      const res = await apiClient.ingestRepository(url.trim(), branch.trim() || 'main');
+      const token = isPrivate ? accessToken.trim() : undefined;
+      const res = await apiClient.ingestRepository(url.trim(), branch.trim() || 'main', token);
       setActiveRepoId(res.repositoryId);
     } catch (err: any) {
       setIsSubmitting(false);
@@ -166,6 +191,81 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
               </div>
             </div>
 
+            {/* Private Repo Toggle */}
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPrivate(!isPrivate);
+                  if (isPrivate) { setAccessToken(''); setShowToken(false); }
+                  setErrorMessage(null);
+                }}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-1.5 rounded-lg transition-colors ${isPrivate ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 text-slate-400'}`}>
+                    <Lock className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="text-left">
+                    <p className={`text-xs font-semibold transition-colors ${isPrivate ? 'text-amber-300' : 'text-slate-300'}`}>Private Repository</p>
+                    <p className="text-[10px] text-slate-500">Requires a GitHub Personal Access Token</p>
+                  </div>
+                </div>
+                {/* Toggle Pill */}
+                <div className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${isPrivate ? 'bg-amber-500' : 'bg-slate-700'}`}>
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${isPrivate ? 'left-5' : 'left-0.5'}`} />
+                </div>
+              </button>
+
+              {/* PAT Input — animated slide-down */}
+              {isPrivate && (
+                <div className="px-4 pb-4 pt-1 space-y-3 border-t border-white/10 animate-in slide-in-from-top-2 duration-200">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                      Personal Access Token
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showToken ? 'text' : 'password'}
+                        placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                        value={accessToken}
+                        onChange={(e) => setAccessToken(e.target.value)}
+                        className="glass-input w-full rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 font-mono pr-10 border border-amber-500/20 focus:border-amber-500/50"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowToken(!showToken)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition"
+                        tabIndex={-1}
+                      >
+                        {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Token help + security note */}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/30 rounded-lg px-2.5 py-1.5">
+                      <ShieldCheck className="w-3 h-3 shrink-0" />
+                      <span>Used only for git clone. Never stored or logged.</span>
+                    </div>
+                    <a
+                      href="https://github.com/settings/tokens/new?scopes=repo&description=Codebase+Onboarder"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-[10px] text-brand-400 hover:text-brand-300 whitespace-nowrap shrink-0 transition"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Generate token
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Sample Repos */}
             <div className="pt-2">
               <span className="text-xs text-slate-400 font-medium">Or choose a quick demo repository:</span>
@@ -177,6 +277,8 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
                     onClick={() => {
                       setUrl(sample.url);
                       setBranch(sample.branch);
+                      setIsPrivate(false);
+                      setAccessToken('');
                     }}
                     className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-brand-500/20 text-slate-300 hover:text-brand-300 border border-white/10 hover:border-brand-500/40 transition"
                   >

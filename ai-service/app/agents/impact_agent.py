@@ -20,8 +20,8 @@ class ImpactAnalysisAgent:
     def openai(self) -> OpenAI:
         if self._openai_client is None:
             self._openai_client = OpenAI(
-                api_key=settings.OPENAI_API_KEY or "dummy_key",
-                base_url=settings.OPENAI_BASE_URL,
+                api_key=settings.active_api_key or "dummy_key",
+                base_url=settings.active_base_url,
             )
         return self._openai_client
 
@@ -86,7 +86,7 @@ class ImpactAnalysisAgent:
         )
 
         # 2. LLM Interpretation (Advisory Only - Never Allowed to Invent Dependencies)
-        if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "your_openai_api_key_here":
+        if settings.is_llm_configured:
             try:
                 direct_names = [d["label"] for d in graph_facts.direct_dependents[:8]]
                 indirect_names = [d["label"] for d in graph_facts.indirect_dependents[:8]]
@@ -115,7 +115,7 @@ Provide:
 2. 3 Actionable Verification Safeguards."""
 
                 resp = self.openai.chat.completions.create(
-                    model=settings.OPENAI_MODEL,
+                    model=settings.active_chat_model,
                     messages=[
                         {"role": "system", "content": "You are a code change risk analyzer. Never invent dependencies."},
                         {"role": "user", "content": prompt},
@@ -133,7 +133,7 @@ Provide:
             architectural_assessment=ai_assessment,
             recommendations=recommendations,
             risk_analysis=f"Deterministic risk rating '{risk_level}' with blast radius score of {score}/100 based on AST reachability.",
-            is_ai_generated=bool(settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "your_openai_api_key_here"),
+            is_ai_generated=settings.is_llm_configured,
             disclaimer=(
                 "Architectural interpretation synthesized strictly from deterministic AST graph facts. "
                 "The LLM is strictly prohibited from inventing or assuming dependencies."

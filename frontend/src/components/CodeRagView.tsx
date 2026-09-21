@@ -1,4 +1,8 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
   Send,
   Bot,
@@ -147,7 +151,122 @@ export const CodeRagView: React.FC<CodeRagViewProps> = ({ repository, onJumpToCi
                   : 'glass-panel text-slate-200 rounded-tl-none border border-white/10'
               }`}
             >
-              <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+              {/* Message body — render as Markdown */}
+              <div className="prose prose-invert prose-sm max-w-none leading-relaxed
+                prose-p:my-1 prose-p:leading-relaxed
+                prose-headings:text-brand-300 prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1
+                prose-strong:text-white prose-strong:font-semibold
+                prose-em:text-slate-300
+                prose-code:text-emerald-300 prose-code:bg-dark-900 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-mono prose-code:before:content-none prose-code:after:content-none
+                prose-pre:bg-transparent prose-pre:p-0 prose-pre:my-2
+                prose-ul:my-1.5 prose-ul:pl-4 prose-ul:space-y-0.5 prose-li:marker:text-brand-400
+                prose-ol:my-1.5 prose-ol:pl-4 prose-ol:space-y-0.5
+                prose-blockquote:border-l-brand-500 prose-blockquote:bg-white/5 prose-blockquote:rounded-r prose-blockquote:py-1 prose-blockquote:my-2 prose-blockquote:text-slate-300
+                prose-table:text-xs prose-th:text-brand-300 prose-td:border-white/10 prose-th:border-white/10
+                prose-a:text-brand-400 prose-a:underline">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code({ node, inline, className, children, ...props }: any) {
+                      const match = /language-(\w+)/.exec(className || '');
+                      const language = match ? match[1] : '';
+                      const code = String(children).replace(/\n$/, '');
+                      if (!inline && language) {
+                        return (
+                          <div className="rounded-lg overflow-hidden my-2 border border-white/10">
+                            <div className="flex items-center justify-between px-3 py-1.5 bg-dark-900/80 border-b border-white/10">
+                              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">{language}</span>
+                            </div>
+                            <SyntaxHighlighter
+                              style={oneDark}
+                              language={language}
+                              PreTag="div"
+                              customStyle={{ margin: 0, borderRadius: 0, fontSize: '11px', background: 'rgba(0,0,0,0.5)' }}
+                              {...props}
+                            >
+                              {code}
+                            </SyntaxHighlighter>
+                          </div>
+                        );
+                      }
+                      // Inline code or code without language
+                      if (!inline && !language && code.includes('\n')) {
+                        return (
+                          <div className="rounded-lg overflow-hidden my-2 border border-white/10">
+                            <SyntaxHighlighter
+                              style={oneDark}
+                              language="text"
+                              PreTag="div"
+                              customStyle={{ margin: 0, borderRadius: 0, fontSize: '11px', background: 'rgba(0,0,0,0.5)' }}
+                              {...props}
+                            >
+                              {code}
+                            </SyntaxHighlighter>
+                          </div>
+                        );
+                      }
+                      return (
+                        <code className="text-emerald-300 bg-emerald-950/40 px-1.5 py-0.5 rounded text-[11px] font-mono border border-emerald-800/30" {...props}>
+                          {children}
+                        </code>
+                      );
+                    },
+                    a({ href, children }: any) {
+                      return (
+                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">
+                          {children}
+                        </a>
+                      );
+                    },
+                    table({ children }: any) {
+                      return (
+                        <div className="overflow-x-auto my-2 rounded-lg border border-white/10">
+                          <table className="w-full text-[11px]">{children}</table>
+                        </div>
+                      );
+                    },
+                    th({ children }: any) {
+                      return <th className="text-left px-3 py-2 bg-white/5 text-brand-300 font-semibold border-b border-white/10">{children}</th>;
+                    },
+                    td({ children }: any) {
+                      return <td className="px-3 py-2 border-b border-white/5 text-slate-300">{children}</td>;
+                    },
+                    blockquote({ children }: any) {
+                      return (
+                        <blockquote className="border-l-2 border-brand-500 pl-3 py-1 my-2 bg-white/5 rounded-r text-slate-300 italic text-[11px]">
+                          {children}
+                        </blockquote>
+                      );
+                    },
+                    ul({ children }: any) {
+                      return <ul className="list-disc pl-4 my-1.5 space-y-0.5">{children}</ul>;
+                    },
+                    ol({ children }: any) {
+                      return <ol className="list-decimal pl-4 my-1.5 space-y-0.5">{children}</ol>;
+                    },
+                    li({ children }: any) {
+                      return <li className="text-slate-200 marker:text-brand-400">{children}</li>;
+                    },
+                    h1({ children }: any) {
+                      return <h1 className="text-base font-bold text-brand-300 mt-3 mb-1.5">{children}</h1>;
+                    },
+                    h2({ children }: any) {
+                      return <h2 className="text-sm font-bold text-brand-300 mt-2.5 mb-1">{children}</h2>;
+                    },
+                    h3({ children }: any) {
+                      return <h3 className="text-xs font-semibold text-brand-300 mt-2 mb-1">{children}</h3>;
+                    },
+                    p({ children }: any) {
+                      return <p className="text-slate-200 my-1 leading-relaxed">{children}</p>;
+                    },
+                    hr() {
+                      return <hr className="border-white/10 my-3" />;
+                    },
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              </div>
 
               {/* Grounded Citations Badges */}
               {msg.answerData?.citations && msg.answerData.citations.length > 0 && (

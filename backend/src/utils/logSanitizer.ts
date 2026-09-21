@@ -6,6 +6,8 @@
 const SENSITIVE_PATTERNS = [
   // OpenAI API Key
   { pattern: /sk-[A-Za-z0-9_\-]{20,}/g, replacement: '[REDACTED_OPENAI_KEY]' },
+  // Google Gemini API Key
+  { pattern: /AIza[0-9A-Za-z\-_]{32,}/g, replacement: '[REDACTED_GEMINI_KEY]' },
   // GitHub Tokens (ghp_, gho_, ghu_, ghs_, ghr_)
   { pattern: /gh[pousr][_-][A-Za-z0-9_]{20,}/g, replacement: '[REDACTED_GITHUB_TOKEN]' },
   // AWS Access Key ID

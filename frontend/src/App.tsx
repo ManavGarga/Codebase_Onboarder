@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from './api/client';
 import { Repository, GitHubUser } from './types';
@@ -60,18 +60,18 @@ export const App: React.FC = () => {
     enabled: !!selectedRepoId && selectedRepo?.status === 'READY',
   });
 
-  const handleSelectFileInMonaco = (filePath: string, line?: number) => {
+  const handleSelectFileInMonaco = useCallback((filePath: string, line?: number) => {
     setActiveEditorFile(filePath);
     setActiveEditorLine(line || 1);
     setActiveTab('code');
-  };
+  }, []);
 
-  const handleIngestionComplete = (newRepo: Repository) => {
+  const handleIngestionComplete = useCallback((newRepo: Repository) => {
     refetchRepos();
     setSelectedRepoId(newRepo.id);
     setIsIngestModalOpen(false);
     setActiveTab('overview');
-  };
+  }, [refetchRepos]);
 
   const handleSelectGitHubRepository = (repoUrl: string, branch: string, _isPrivate: boolean) => {
     setIngestInitialUrl(repoUrl);

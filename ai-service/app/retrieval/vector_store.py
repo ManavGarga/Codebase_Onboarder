@@ -14,7 +14,7 @@ class VectorStore:
 
     def __init__(self):
         self.collection_name = settings.QDRANT_COLLECTION
-        self.embedding_dim = settings.EMBEDDING_DIM
+        self.embedding_dim = settings.active_embedding_dim
         self._qdrant_client: Optional[QdrantClient] = None
         self._openai_client: Optional[OpenAI] = None
 
@@ -43,10 +43,10 @@ class VectorStore:
     @property
     def openai(self) -> OpenAI:
         if self._openai_client is None:
-            api_key = settings.OPENAI_API_KEY or "dummy_key_for_offline"
+            api_key = settings.active_api_key or "dummy_key_for_offline"
             self._openai_client = OpenAI(
                 api_key=api_key,
-                base_url=settings.OPENAI_BASE_URL,
+                base_url=settings.active_base_url,
             )
         return self._openai_client
 
@@ -54,6 +54,23 @@ class VectorStore:
         try:
             collections = self.qdrant.get_collections().collections
             exists = any(c.name == self.collection_name for c in collections)
+            if exists:
+                try:
+                    c_info = self.qdrant.get_collection(self.collection_name)
+                    current_size = None
+                    if hasattr(c_info.config.params.vectors, "size"):
+                        current_size = c_info.config.params.vectors.size
+                    elif isinstance(c_info.config.params.vectors, dict) and "size" in c_info.config.params.vectors:
+                        current_size = c_info.config.params.vectors["size"]
+                    if current_size and current_size != self.embedding_dim:
+                        logger.warning(
+                            f"Collection '{self.collection_name}' dimension mismatch (existing: {current_size}, needed: {self.embedding_dim}). Recreating collection for new model."
+                        )
+                        self.qdrant.delete_collection(self.collection_name)
+                        exists = False
+                except Exception as ex:
+                    logger.warning(f"Could not verify collection vector size: {ex}")
+
             if not exists:
                 self.qdrant.create_collection(
                     collection_name=self.collection_name,
@@ -78,7 +95,7 @@ class VectorStore:
                     field_name="file_path",
                     field_schema=qmodels.PayloadSchemaType.KEYWORD,
                 )
-                logger.info(f"Created Qdrant collection '{self.collection_name}' with payload indexes")
+                logger.info(f"Created Qdrant collection '{self.collection_name}' with payload indexes (dim={self.embedding_dim})")
         except Exception as e:
             logger.error(f"Error ensuring collection: {e}")
 
@@ -86,9 +103,9 @@ class VectorStore:
         if not texts:
             return []
 
-        # If no OpenAI key is set, generate deterministic pseudo-embeddings for offline testing
-        if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY == "your_openai_api_key_here":
-            logger.warning("No OPENAI_API_KEY provided. Using normalized hash-based embeddings for test mode.")
+        # If no active LLM key is set, generate deterministic pseudo-embeddings for offline testing
+        if not settings.is_llm_configured:
+            logger.warning("No active LLM API key provided. Using normalized hash-based embeddings for test mode.")
             return [self._mock_embedding(t) for t in texts]
 
         try:
@@ -96,14 +113,23 @@ class VectorStore:
             results: List[List[float]] = []
             for i in range(0, len(texts), 50):
                 batch = texts[i : i + 50]
-                resp = self.openai.embeddings.create(
-                    input=batch,
-                    model=settings.OPENAI_EMBEDDING_MODEL,
-                )
+                try:
+                    kwargs = {
+                        "input": batch,
+                        "model": settings.active_embedding_model,
+                    }
+                    if self.embedding_dim:
+                        kwargs["dimensions"] = self.embedding_dim
+                    resp = self.openai.embeddings.create(**kwargs)
+                except Exception:
+                    resp = self.openai.embeddings.create(
+                        input=batch,
+                        model=settings.active_embedding_model,
+                    )
                 results.extend([item.embedding for item in resp.data])
             return results
         except Exception as e:
-            logger.error(f"OpenAI embedding error ({e}). Falling back to deterministic embeddings.")
+            logger.error(f"Embedding error ({e}). Falling back to deterministic embeddings.")
             return [self._mock_embedding(t) for t in texts]
 
     def _mock_embedding(self, text: str) -> List[float]:

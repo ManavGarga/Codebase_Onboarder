@@ -19,8 +19,8 @@ class PRReviewAgent:
     def openai(self) -> OpenAI:
         if self._openai_client is None:
             self._openai_client = OpenAI(
-                api_key=settings.OPENAI_API_KEY or "dummy_key",
-                base_url=settings.OPENAI_BASE_URL,
+                api_key=settings.active_api_key or "dummy_key",
+                base_url=settings.active_base_url,
             )
         return self._openai_client
 
@@ -55,7 +55,7 @@ class PRReviewAgent:
             "Verify that error handling catches boundary failures without crashing the server.",
         ]
 
-        if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "your_openai_api_key_here":
+        if settings.is_llm_configured:
             try:
                 prompt = f"""You are a principal engineer performing an architectural review of a Pull Request diff.
 PR Title: {pr_title or 'Untitled PR'}
@@ -69,7 +69,7 @@ Provide:
 3. Specific test cases that must be executed"""
 
                 resp = self.openai.chat.completions.create(
-                    model=settings.OPENAI_MODEL,
+                    model=settings.active_chat_model,
                     messages=[
                         {"role": "system", "content": "You are a senior code reviewer."},
                         {"role": "user", "content": prompt},

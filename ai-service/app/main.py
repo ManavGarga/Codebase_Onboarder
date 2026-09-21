@@ -39,7 +39,12 @@ def health_check():
         "version": "1.0.0",
         "tree_sitter": "active",
         "vector_db": settings.QDRANT_COLLECTION,
-        "openai_configured": bool(settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "your_openai_api_key_here"),
+        "llm_provider": settings.active_provider,
+        "llm_model": settings.active_chat_model,
+        "embedding_model": settings.active_embedding_model,
+        "llm_configured": settings.is_llm_configured,
+        # Keep openai_configured for backwards compatibility
+        "openai_configured": settings.is_llm_configured,
     }
 
 
