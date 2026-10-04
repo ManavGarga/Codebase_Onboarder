@@ -44,12 +44,7 @@ export const App: React.FC = () => {
     refetchInterval: 5000,
   });
 
-  // Select first repo if none selected
-  useEffect(() => {
-    if (!selectedRepoId && repositories.length > 0) {
-      setSelectedRepoId(repositories[0].id);
-    }
-  }, [repositories, selectedRepoId]);
+
 
   const selectedRepo = repositories.find((r) => r.id === selectedRepoId) || null;
 

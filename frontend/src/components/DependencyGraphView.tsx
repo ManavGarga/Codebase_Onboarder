@@ -143,7 +143,7 @@ export const DependencyGraphView: React.FC<DependencyGraphViewProps> = ({
   onSelectFileInMonaco,
 }) => {
   // Target node state
-  const [selectedTarget, setSelectedTarget] = useState<string>('User.js');
+  const [selectedTarget, setSelectedTarget] = useState<string>('');
   const [viewMode, setViewMode] = useState<'focused' | 'overview'>('focused');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeInspectorTab, setActiveInspectorTab] = useState<'facts' | 'llm'>('facts');

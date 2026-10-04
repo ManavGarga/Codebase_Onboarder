@@ -136,7 +136,7 @@ export const ExecutionFlowView: React.FC<ExecutionFlowViewProps> = ({
   graphData,
   onSelectFileInMonaco,
 }) => {
-  const [queryInput, setQueryInput] = useState<string>('What happens when a student registers?');
+  const [queryInput, setQueryInput] = useState<string>('Show me the main execution flow');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [traceResult, setTraceResult] = useState<ExecutionFlowTrace | null>(null);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number>(0);
