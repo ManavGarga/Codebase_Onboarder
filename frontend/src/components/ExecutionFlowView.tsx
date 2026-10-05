@@ -141,6 +141,20 @@ export const ExecutionFlowView: React.FC<ExecutionFlowViewProps> = ({
   const [traceResult, setTraceResult] = useState<ExecutionFlowTrace | null>(null);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number>(0);
 
+  if (repository && repository.status !== 'READY') {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center p-8">
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 mb-4">
+          <ShieldAlert className="w-12 h-12" />
+        </div>
+        <h3 className="text-xl font-bold text-white mb-2">Analysis Not Ready</h3>
+        <p className="text-sm text-slate-400 max-w-md">
+          The repository analysis has not completed successfully. Please check the ingestion status or try re-ingesting the repository to view its execution flow.
+        </p>
+      </div>
+    );
+  }
+
   // Quick query chips
   const sampleQueries = [
     'What happens when a student registers?',

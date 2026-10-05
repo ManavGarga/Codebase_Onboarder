@@ -152,12 +152,12 @@ export const DependencyGraphView: React.FC<DependencyGraphViewProps> = ({
 
   // Available files in graph
   const availableFiles = useMemo(() => {
-    if (!graphData) return ['User.js'];
+    if (!graphData) return [];
     const files = graphData.nodes
       .filter((n) => n.type === 'file')
       .map((n) => n.label || n.file_path || '')
       .filter(Boolean);
-    return files.length > 0 ? Array.from(new Set(files)) : ['User.js'];
+    return files.length > 0 ? Array.from(new Set(files)) : [];
   }, [graphData]);
 
   // Set initial selected target
@@ -167,6 +167,20 @@ export const DependencyGraphView: React.FC<DependencyGraphViewProps> = ({
       setSelectedTarget(defaultTarget);
     }
   }, [availableFiles, selectedTarget]);
+
+  if (repository && repository.status !== 'READY') {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center p-8">
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 mb-4">
+          <AlertTriangle className="w-12 h-12" />
+        </div>
+        <h3 className="text-xl font-bold text-white mb-2">Analysis Not Ready</h3>
+        <p className="text-sm text-slate-400 max-w-md">
+          The repository analysis has not completed successfully. Please check the ingestion status or try re-ingesting the repository to view its dependency graph.
+        </p>
+      </div>
+    );
+  }
 
   // Fetch or calculate Impact data when selectedTarget changes
   useEffect(() => {
@@ -199,39 +213,12 @@ export const DependencyGraphView: React.FC<DependencyGraphViewProps> = ({
   const localBlastFacts = useMemo(() => {
     if (!graphData || !selectedTarget) {
       return {
-        directDependents: [
-          { id: 'authService', label: 'authService', file_path: 'src/services/authService.js', type: 'service' },
-          { id: 'profileCtrl', label: 'profileCtrl', file_path: 'src/controllers/profileCtrl.js', type: 'controller' },
-          { id: 'adminCtrl', label: 'adminCtrl', file_path: 'src/controllers/adminCtrl.js', type: 'controller' },
-        ],
-        indirectDependents: [
-          { id: 'Login', label: 'Login', file_path: 'src/components/Login.jsx', type: 'component', parent_id: 'authService', depth: 2 },
-          { id: 'Profile', label: 'Profile', file_path: 'src/components/Profile.jsx', type: 'component', parent_id: 'profileCtrl', depth: 2 },
-          { id: 'Admin', label: 'Admin', file_path: 'src/components/Admin.jsx', type: 'component', parent_id: 'adminCtrl', depth: 2 },
-          { id: 'AuthMiddleware', label: 'AuthMiddleware', file_path: 'src/middleware/auth.js', type: 'middleware', depth: 2 },
-          { id: 'UserDashboard', label: 'UserDashboard', file_path: 'src/views/Dashboard.jsx', type: 'component', depth: 2 },
-          { id: 'AuditLogger', label: 'AuditLogger', file_path: 'src/utils/audit.js', type: 'util', depth: 2 },
-          { id: 'SettingsCtrl', label: 'SettingsCtrl', file_path: 'src/controllers/settingsCtrl.js', type: 'controller', depth: 2 },
-          { id: 'NotificationService', label: 'NotificationService', file_path: 'src/services/notification.js', type: 'service', depth: 2 },
-        ],
-        affectedAPIs: [
-          { http_method: 'POST', path: '/api/auth/login', handler: 'login' },
-          { http_method: 'GET', path: '/api/profile', handler: 'getProfile' },
-          { http_method: 'DELETE', path: '/api/admin/users/:id', handler: 'deleteUser' },
-          { http_method: 'PUT', path: '/api/users/settings', handler: 'updateSettings' },
-          { http_method: 'GET', path: '/api/users/export', handler: 'exportData' },
-        ],
-        affectedComponents: [
-          { label: 'Login', type: 'component' },
-          { label: 'Profile', type: 'component' },
-          { label: 'Admin', type: 'component' },
-          { label: 'UserDashboard', type: 'component' },
-          { label: 'profileCtrl', type: 'controller' },
-          { label: 'adminCtrl', type: 'controller' },
-          { label: 'SettingsCtrl', type: 'controller' },
-        ],
-        risk: 'HIGH',
-        score: 78,
+        directDependents: [],
+        indirectDependents: [],
+        affectedAPIs: [],
+        affectedComponents: [],
+        risk: 'LOW',
+        score: 0,
       };
     }
 
@@ -604,14 +591,11 @@ export const DependencyGraphView: React.FC<DependencyGraphViewProps> = ({
                 }}
                 className="pl-8 pr-8 py-1.5 text-xs bg-dark-800/90 border border-white/15 rounded-xl text-white font-mono focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
               >
-                <option value="User.js">User.js (Demo Root)</option>
-                {availableFiles
-                  .filter((f) => f !== 'User.js')
-                  .map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
+                {availableFiles.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
               </select>
             </div>
 
