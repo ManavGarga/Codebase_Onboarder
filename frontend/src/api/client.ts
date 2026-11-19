@@ -15,15 +15,68 @@ import {
   GitHubRepository,
 } from '../types';
 
+const STORAGE_KEYS = {
+  TENANT_ID: 'codebase_onboarder_tenant_id',
+  SESSION_TOKEN: 'codebase_onboarder_token',
+};
+
+// Generates or retrieves a unique per-browser client tenant ID
+export const getClientTenantId = (): string => {
+  if (typeof window === 'undefined') return 'server_render';
+
+  let tenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
+  if (!tenantId || tenantId === 'default_user') {
+    const randomSuffix =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID().replace(/-/g, '').substring(0, 16)
+        : Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    tenantId = `guest_${randomSuffix}`;
+    localStorage.setItem(STORAGE_KEYS.TENANT_ID, tenantId);
+  }
+  return tenantId;
+};
+
 const api = axios.create({
   baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
-    'x-user-id': 'default_user',
   },
 });
 
+// Dynamic interceptor attaching tenant ID and auth token to every request
+api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem(STORAGE_KEYS.SESSION_TOKEN);
+    const tenantId = getClientTenantId();
+
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    config.headers['x-user-id'] = tenantId;
+  }
+  return config;
+});
+
 export const apiClient = {
+  // Authentication & Session Management
+  setAuthSession: (sessionToken: string, user?: { login?: string }) => {
+    localStorage.setItem(STORAGE_KEYS.SESSION_TOKEN, sessionToken);
+    if (user?.login) {
+      localStorage.setItem(STORAGE_KEYS.TENANT_ID, user.login);
+    }
+  },
+
+  clearAuthSession: () => {
+    localStorage.removeItem(STORAGE_KEYS.SESSION_TOKEN);
+    const randomSuffix =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID().replace(/-/g, '').substring(0, 16)
+        : Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    localStorage.setItem(STORAGE_KEYS.TENANT_ID, `guest_${randomSuffix}`);
+  },
+
+  getCurrentTenantId: (): string => getClientTenantId(),
+
   // Repositories
   listRepositories: async (): Promise<Repository[]> => {
     const res = await api.get('/repositories');
@@ -146,8 +199,17 @@ export const apiClient = {
   },
 
   getGitHubUser: async () => {
-    const res = await api.get('/auth/github/user');
-    return res.data.user;
+    const token = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.SESSION_TOKEN) : null;
+    if (!token) {
+      return null;
+    }
+    try {
+      const res = await api.get('/auth/github/user');
+      return res.data.user;
+    } catch {
+      localStorage.removeItem(STORAGE_KEYS.SESSION_TOKEN);
+      return null;
+    }
   },
 
   getGitHubRepositories: async () => {
@@ -156,7 +218,10 @@ export const apiClient = {
   },
 
   logoutGitHub: async () => {
-    const res = await api.post('/auth/logout');
-    return res.data;
+    try {
+      await api.post('/auth/logout');
+    } catch {}
+    apiClient.clearAuthSession();
+    return { success: true };
   },
 };

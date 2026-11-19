@@ -29,22 +29,61 @@ export const App: React.FC = () => {
   const [activeEditorFile, setActiveEditorFile] = useState<string | null>(null);
   const [activeEditorLine, setActiveEditorLine] = useState<number | null>(null);
 
-  // Load GitHub user on mount
+  // Track if RAG tab has been visited so its conversation state is kept alive across tab switches
+  const [hasVisitedRag, setHasVisitedRag] = useState(false);
+
   useEffect(() => {
-    apiClient
-      .getGitHubUser()
-      .then((user) => setGitHubUser(user))
-      .catch(() => setGitHubUser(null));
+    if (activeTab === 'rag') {
+      setHasVisitedRag(true);
+    }
+  }, [activeTab]);
+
+  // Load GitHub user on mount or handle OAuth redirect code
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const mock = params.get('mock') === 'true';
+
+    if (code) {
+      fetch('/api/auth/github/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, mock }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && data.user) {
+            if (data.sessionToken) {
+              apiClient.setAuthSession(data.sessionToken, data.user);
+            }
+            setGitHubUser(data.user);
+            refetchRepos();
+          }
+        })
+        .finally(() => {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        });
+    } else {
+      apiClient
+        .getGitHubUser()
+        .then((user) => setGitHubUser(user))
+        .catch(() => setGitHubUser(null));
+    }
   }, []);
 
-  // Query: List repositories
+  // Query: List repositories for current tenant only
   const { data: repositories = [], refetch: refetchRepos } = useQuery({
-    queryKey: ['repositories'],
+    queryKey: ['repositories', gitHubUser?.login],
     queryFn: apiClient.listRepositories,
     refetchInterval: 5000,
   });
 
-
+  // Automatically select the first repository if none selected
+  useEffect(() => {
+    if (repositories.length > 0 && !selectedRepoId) {
+      setSelectedRepoId(repositories[0].id);
+    }
+  }, [repositories, selectedRepoId]);
 
   const selectedRepo = repositories.find((r) => r.id === selectedRepoId) || null;
 
@@ -68,6 +107,13 @@ export const App: React.FC = () => {
     setActiveTab('overview');
   }, [refetchRepos]);
 
+  const handleLogout = useCallback(async () => {
+    await apiClient.logoutGitHub();
+    setGitHubUser(null);
+    setSelectedRepoId(null);
+    refetchRepos();
+  }, [refetchRepos]);
+
   const handleSelectGitHubRepository = (repoUrl: string, branch: string, _isPrivate: boolean) => {
     setIngestInitialUrl(repoUrl);
     setIngestInitialBranch(branch || 'main');
@@ -89,6 +135,7 @@ export const App: React.FC = () => {
         }}
         onOpenGitHubModal={() => setIsGitHubPickerOpen(true)}
         gitHubUser={gitHubUser}
+        onLogout={handleLogout}
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
@@ -134,11 +181,14 @@ export const App: React.FC = () => {
           />
         )}
 
-        {activeTab === 'rag' && (
-          <CodeRagView
-            repository={selectedRepo}
-            onJumpToCitation={handleSelectFileInMonaco}
-          />
+        {(hasVisitedRag || activeTab === 'rag') && (
+          <div className={activeTab === 'rag' ? '' : 'hidden'}>
+            <CodeRagView
+              key={selectedRepo?.id || 'demo'}
+              repository={selectedRepo}
+              onJumpToCitation={handleSelectFileInMonaco}
+            />
+          </div>
         )}
 
         {activeTab === 'roadmap' && (
@@ -179,7 +229,10 @@ export const App: React.FC = () => {
         onClose={() => setIsGitHubPickerOpen(false)}
         currentUser={gitHubUser}
         onSelectRepository={handleSelectGitHubRepository}
-        onLoginSuccess={(user) => setGitHubUser(user)}
+        onLoginSuccess={(user) => {
+          setGitHubUser(user);
+          refetchRepos();
+        }}
       />
     </div>
   );

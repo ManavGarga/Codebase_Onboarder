@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -13,6 +13,7 @@ import {
   Loader2,
   FileCode,
   CheckCircle2,
+  Trash2,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { GroundedAnswer, Repository } from '../types';
@@ -30,18 +31,60 @@ interface ChatMessage {
   timestamp: string;
 }
 
+const DEFAULT_WELCOME_MESSAGE: ChatMessage = {
+  id: 'welcome',
+  sender: 'assistant',
+  content:
+    "Hello! I am your codebase intelligence assistant. I analyze this repository's Tree-sitter AST, knowledge graph, and vector embeddings to answer your architecture and implementation questions with strict line-level citations.",
+  timestamp: new Date().toLocaleTimeString(),
+};
+
 export const CodeRagView: React.FC<CodeRagViewProps> = ({ repository, onJumpToCitation }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      sender: 'assistant',
-      content:
-        "Hello! I am your codebase intelligence assistant. I analyze this repository's Tree-sitter AST, knowledge graph, and vector embeddings to answer your architecture and implementation questions with strict line-level citations.",
-      timestamp: new Date().toLocaleTimeString(),
-    },
-  ]);
+  const storageKey = `rag_chat_history_${repository?.id || 'demo'}`;
+
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse RAG chat history from localStorage', e);
+    }
+    return [DEFAULT_WELCOME_MESSAGE];
+  });
+
   const [inputQuery, setInputQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(messages));
+    } catch (e) {
+      console.warn('Failed to save RAG chat history to localStorage', e);
+    }
+  }, [messages, storageKey]);
+
+  const handleClearHistory = () => {
+    setMessages([{ ...DEFAULT_WELCOME_MESSAGE, timestamp: new Date().toLocaleTimeString() }]);
+    try {
+      localStorage.removeItem(storageKey);
+    } catch (e) {
+      console.warn('Failed to remove RAG chat history from localStorage', e);
+    }
+  };
 
   const sampleQuestions = [
     'How is authentication and user login handled?',
@@ -131,6 +174,30 @@ export const CodeRagView: React.FC<CodeRagViewProps> = ({ repository, onJumpToCi
 
   return (
     <div className="flex flex-col w-full h-[calc(100vh-105px)] max-w-5xl mx-auto p-4">
+      {/* Top Bar with Clear History */}
+      <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10 shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">Code Intelligence Assistant</h2>
+            <p className="text-[11px] text-slate-400">Ask architectural and implementation questions grounded in AST & knowledge graph</p>
+          </div>
+        </div>
+        {messages.length > 1 && (
+          <button
+            type="button"
+            onClick={handleClearHistory}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-white/5 hover:border-rose-500/20 transition"
+            title="Clear conversation history"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear History</span>
+          </button>
+        )}
+      </div>
+
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto space-y-4 pr-2">
         {messages.map((msg) => (
@@ -329,6 +396,7 @@ export const CodeRagView: React.FC<CodeRagViewProps> = ({ repository, onJumpToCi
             <span>Synthesizing answer from Tree-sitter AST and Qdrant embeddings...</span>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Suggested Questions (shown when chat is young) */}

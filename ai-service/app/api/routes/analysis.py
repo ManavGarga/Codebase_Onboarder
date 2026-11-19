@@ -27,15 +27,24 @@ from app.retrieval.hybrid_search import hybrid_retriever
 
 router = APIRouter(prefix="", tags=["Analysis & Ingestion"])
 
-# In-memory caches for active repositories (backed by vector store and disk)
-REPO_GRAPHS: Dict[str, KnowledgeGraphData] = {}
-REPO_SYMBOLS: Dict[str, List[SymbolDefinition]] = {}
-REPO_ROUTES: Dict[str, List[RouteDefinition]] = {}
-REPO_MODELS: Dict[str, List[DatabaseModelDefinition]] = {}
-REPO_FRAMEWORKS: Dict[str, List[str]] = {}
+# Persistent stores for active repositories (backed by disk and in-memory cache)
+from app.storage import (
+    persistent_graphs,
+    persistent_symbols,
+    persistent_routes,
+    persistent_models,
+    persistent_frameworks,
+    persistent_states,
+    delete_all_repository_metadata,
+)
 
-# In-memory state tracking for incremental indexing
-REPO_STATES: Dict[str, Dict[str, Any]] = {}
+REPO_GRAPHS = persistent_graphs
+REPO_SYMBOLS = persistent_symbols
+REPO_ROUTES = persistent_routes
+REPO_MODELS = persistent_models
+REPO_FRAMEWORKS = persistent_frameworks
+REPO_STATES = persistent_states
+
 
 IGNORED_DIRS = {
     ".git",
@@ -682,21 +691,67 @@ def analyze_repository(req: IngestionRequest):
 
 @router.get("/graph/{repository_id}", response_model=KnowledgeGraphData)
 def get_repository_graph(repository_id: str):
-    if repository_id not in REPO_GRAPHS:
+    graph = REPO_GRAPHS.get(repository_id)
+    if not graph:
+        # Check if state exists to reconstruct the graph on-demand
+        state = REPO_STATES.get(repository_id)
+        if state:
+            all_files = list(state.get("file_hashes", {}).keys())
+            all_syms = [s for syms in state.get("file_symbols", {}).values() for s in syms]
+            all_rts = [r for rts in state.get("file_routes", {}).values() for r in rts]
+            all_mdls = [m for mdls in state.get("file_models", {}).values() for m in mdls]
+            all_imps = [i for imps in state.get("file_imports", {}).values() for i in imps]
+            graph = knowledge_graph_builder.build_graph(
+                repository_id=repository_id,
+                files=all_files,
+                symbols=all_syms,
+                routes=all_rts,
+                models=all_mdls,
+                imports=all_imps,
+            )
+            REPO_GRAPHS[repository_id] = graph
+
+    if not graph:
         raise HTTPException(status_code=404, detail=f"Knowledge graph for '{repository_id}' not found. Run analysis first.")
-    return REPO_GRAPHS[repository_id]
+    return graph
 
 
 @router.get("/symbols/{repository_id}", response_model=List[SymbolDefinition])
 def get_repository_symbols(repository_id: str):
-    return REPO_SYMBOLS.get(repository_id, [])
+    symbols = REPO_SYMBOLS.get(repository_id)
+    if symbols is None:
+        state = REPO_STATES.get(repository_id)
+        if state:
+            symbols = [s for syms in state.get("file_symbols", {}).values() for s in syms]
+            REPO_SYMBOLS[repository_id] = symbols
+    return symbols or []
 
 
 @router.get("/routes/{repository_id}", response_model=List[RouteDefinition])
 def get_repository_routes(repository_id: str):
-    return REPO_ROUTES.get(repository_id, [])
+    routes = REPO_ROUTES.get(repository_id)
+    if routes is None:
+        state = REPO_STATES.get(repository_id)
+        if state:
+            routes = [r for rts in state.get("file_routes", {}).values() for r in rts]
+            REPO_ROUTES[repository_id] = routes
+    return routes or []
 
 
 @router.get("/models/{repository_id}", response_model=List[DatabaseModelDefinition])
 def get_repository_models(repository_id: str):
-    return REPO_MODELS.get(repository_id, [])
+    models = REPO_MODELS.get(repository_id)
+    if models is None:
+        state = REPO_STATES.get(repository_id)
+        if state:
+            models = [m for mdls in state.get("file_models", {}).values() for m in mdls]
+            REPO_MODELS[repository_id] = models
+    return models or []
+
+
+@router.delete("/repository/{repository_id}")
+def delete_repository_analysis(repository_id: str):
+    """Purges persistent metadata and memory cache for a repository."""
+    delete_all_repository_metadata(repository_id)
+    return {"success": True, "message": f"Purged metadata for repository {repository_id}"}
+

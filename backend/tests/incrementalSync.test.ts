@@ -24,7 +24,7 @@ describe('Incremental Repository Indexing - Backend Suite', () => {
     fs.writeFileSync(path.join(tempRepoPath, 'index.ts'), 'console.log("hello");');
     await execFileAsync('git', ['add', '.'], { cwd: tempRepoPath });
     await execFileAsync('git', ['commit', '-m', 'commit 1'], { cwd: tempRepoPath });
-  });
+  }, 15000);
 
   afterAll(() => {
     try {

@@ -181,9 +181,12 @@ authRouter.post('/github/callback', async (req: Request, res: Response) => {
  * Returns currently authenticated user
  */
 authRouter.get('/github/user', (req: Request, res: Response) => {
-  const token = (req.headers['authorization'] || '').replace(/^Bearer\s+/, '') || DEFAULT_SESSION_TOKEN;
-  const session = activeSessions.get(token);
+  const token = (req.headers['authorization'] || '').replace(/^Bearer\s+/, '').trim();
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Unauthorized. Please login with GitHub.' });
+  }
 
+  const session = activeSessions.get(token);
   if (!session) {
     return res.status(401).json({ success: false, error: 'Unauthorized. Please login with GitHub.' });
   }
@@ -203,12 +206,16 @@ authRouter.get('/github/user', (req: Request, res: Response) => {
  * Lists user repositories (both public and private)
  */
 authRouter.get('/github/repositories', async (req: Request, res: Response) => {
-  const token = (req.headers['authorization'] || '').replace(/^Bearer\s+/, '') || DEFAULT_SESSION_TOKEN;
-  const session = activeSessions.get(token);
+  const token = (req.headers['authorization'] || '').replace(/^Bearer\s+/, '').trim();
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Unauthorized. Please login with GitHub.' });
+  }
 
+  const session = activeSessions.get(token);
   if (!session) {
     return res.status(401).json({ success: false, error: 'Unauthorized. Please login with GitHub.' });
   }
+
 
   // If live GitHub token is present, query GitHub API
   if (session.accessToken) {

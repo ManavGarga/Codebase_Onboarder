@@ -84,6 +84,9 @@ export const RepositoryPickerModal: React.FC<RepositoryPickerModalProps> = ({
       });
       const data = await res.json();
       if (data.success && data.user) {
+        if (data.sessionToken) {
+          apiClient.setAuthSession(data.sessionToken, data.user);
+        }
         onLoginSuccess?.(data.user);
         const repos = await apiClient.getGitHubRepositories();
         setRepositories(repos || []);

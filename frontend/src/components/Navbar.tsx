@@ -15,6 +15,7 @@ import {
   BarChart3,
   Route,
   Github,
+  LogOut,
 } from 'lucide-react';
 import { Repository, IngestionStatus, GitHubUser } from '../types';
 
@@ -25,6 +26,7 @@ interface NavbarProps {
   onOpenIngestModal: () => void;
   onOpenGitHubModal?: () => void;
   gitHubUser?: GitHubUser | null;
+  onLogout?: () => void;
   activeTab: string;
   onTabChange: (tab: string) => void;
 }
@@ -36,6 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenIngestModal,
   onOpenGitHubModal,
   gitHubUser,
+  onLogout,
   activeTab,
   onTabChange,
 }) => {
@@ -141,6 +144,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Github className="w-4 h-4 text-slate-300" />
               )}
               <span>{gitHubUser ? `@${gitHubUser.login}` : 'GitHub Repos'}</span>
+            </button>
+          )}
+
+          {gitHubUser && onLogout && (
+            <button
+              onClick={onLogout}
+              className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-white/10 transition-colors"
+              title="Sign out of GitHub"
+              data-testid="github-logout-btn"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           )}
 
